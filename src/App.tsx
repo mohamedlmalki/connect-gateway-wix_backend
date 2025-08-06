@@ -13,6 +13,9 @@ import Dashboard from "./pages/Dashboard";
 import BouncedEmails from "./pages/BouncedEmails";
 import NotFound from "./pages/NotFound";
 
+import { HeadlessImportPage } from './headless/pages/HeadlessImportPage';
+
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -29,6 +32,7 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/bounced-emails" element={<BouncedEmails />} />
           <Route path="/manage-sites" element={<SiteManagement />} /> {/* <-- ROUTE IS ADDED */}
+		  <Route path="/headless-import" element={<HeadlessImportPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

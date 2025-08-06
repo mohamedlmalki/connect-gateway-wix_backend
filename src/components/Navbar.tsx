@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Mail, Settings, Users } from "lucide-react";
+import { Mail, Settings, Users, Server } from "lucide-react"; // <-- Import the 'Server' icon
 
 const Navbar = () => {
   const location = useLocation();
@@ -22,7 +22,18 @@ const Navbar = () => {
               className="gap-2"
             >
               <Users size={16} />
-              Import Users
+              Velo Import
+            </Button>
+          </Link>
+          {/* NEW LINK FOR HEADLESS IMPORT 👇 */}
+          <Link to="/headless-import">
+            <Button 
+              variant={isActive("/headless-import") ? "default" : "ghost"} 
+              size="sm"
+              className="gap-2"
+            >
+              <Server size={16} />
+              Headless Import
             </Button>
           </Link>
           <Link to="/manage-sites">
