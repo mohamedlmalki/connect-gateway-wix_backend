@@ -26,7 +26,7 @@ import {
     DialogTrigger,
     DialogClose,
 } from "@/components/ui/dialog";
-import { UserPlus, PlayCircle, Building, Terminal, RefreshCw, Trash2, CheckCircle, XCircle, FileJson, Clock, PauseCircle, StopCircle, Search } from "lucide-react";
+import { UserPlus, PlayCircle, Building, Terminal, RefreshCw, Trash2, CheckCircle, XCircle, FileJson, Clock, PauseCircle, StopCircle, Search, Save } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -55,10 +55,14 @@ interface ImportResult {
     details?: any;
 }
 
-// ★★★ This is the interface for the selected member object ★★★
 interface MemberToDelete {
     memberId: string;
     contactId: string;
+}
+
+interface SenderDetails {
+    fromName: string;
+    fromEmail: string;
 }
 
 const AdminImport = () => {
@@ -79,13 +83,67 @@ const AdminImport = () => {
     const [isPaused, setIsPaused] = useState(false);
     const jobPaused = useRef(false);
     const jobCancelled = useRef(false);
-    // ★★★ State for Search and Delete is added back ★★★
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [selectedMembers, setSelectedMembers] = useState<MemberToDelete[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    
+    // State for Sender Details
+    const [senderDetails, setSenderDetails] = useState<SenderDetails | null>(null);
+    const [isFetchingSender, setIsFetchingSender] = useState(false);
+    const [isUpdatingSender, setIsUpdatingSender] = useState(false);
 
+    const fetchSenderDetails = async (siteId: string) => {
+        if (!siteId) return;
+        setIsFetchingSender(true);
+        setSenderDetails(null);
+        try {
+            const response = await fetch(`${API_BASE_URL}/getSenderDetailsFromSite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetSiteId: siteId }),
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.body?.error || 'Failed to fetch sender details.');
+            }
+            const data = await response.json();
+            setSenderDetails(data.senderDetails);
+        } catch (error: any) {
+            toast.error("Error fetching sender details", { description: error.message });
+        } finally {
+            setIsFetchingSender(false);
+        }
+    };
+
+    const handleUpdateSenderName = async () => {
+        if (!senderDetails || !selectedSite) return;
+        setIsUpdatingSender(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/updateSenderDetailsOnSite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    targetSiteId: selectedSite,
+                    fromName: senderDetails.fromName,
+                    fromEmail: senderDetails.fromEmail
+                }),
+            });
+            if (!response.ok) {
+                 const err = await response.json();
+                throw new Error(err.body?.error || 'Failed to update sender name.');
+            }
+            const data = await response.json();
+            toast.success("Sender name updated successfully.", {
+                description: data.verificationNeeded ? "Verification may be required." : ""
+            });
+        } catch (error: any) {
+            toast.error("Update Failed", { description: error.message });
+        } finally {
+            setIsUpdatingSender(false);
+        }
+    };
 
     useEffect(() => {
         const emails = recipientEmails.split(/[,\s\n]+/).map(email => email.trim()).filter(email => email.includes('@'));
@@ -101,8 +159,10 @@ const AdminImport = () => {
             if (!response.ok) throw new Error('Failed to fetch sites.');
             const siteList = await response.json();
             setSites(siteList);
-            if (siteList.length > 0 && !selectedSite) {
-                setSelectedSite(siteList[0].siteId);
+            if (siteList.length > 0) {
+                const initialSiteId = siteList[0].siteId;
+                setSelectedSite(initialSiteId);
+                fetchSenderDetails(initialSiteId); // Fetch sender details for the first site
             }
         } catch (error: any) {
             toast.error("Error loading sites", { description: error.message });
@@ -144,10 +204,9 @@ const AdminImport = () => {
             setIsClearingLogs(false);
         }
     };
-
-    const handleSubmit = async (e: React.FormEvent) => {
+    
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        // ... (This function is unchanged) ...
         if (!selectedSite || !recipientEmails) {
             toast.warning("Missing Information", { description: "Please select a site and provide at least one email." });
             return;
@@ -246,7 +305,6 @@ const AdminImport = () => {
         setIsSubmitting(false);
     };
 
-    // ★★★ Search and Delete functions are added back and corrected ★★★
     const handleSearch = async () => {
         if (!selectedSite) {
             toast.warning("Please select a site to search.");
@@ -270,24 +328,17 @@ const AdminImport = () => {
                     query: searchQuery,
                 }),
             });
-            
-            // This assumes your backend sends clean JSON, as per our final fix
             const result = await response.json();
-
             if (!response.ok) {
                 throw new Error(result.message || "An unknown search error occurred.");
             }
-
-            // We use the raw members array directly from the API response
             setSearchResults(result.members || []);
-            
             const memberCount = result.members ? result.members.length : 0;
             if (memberCount > 0) {
                 toast.success(`Search complete. Found ${memberCount} member(s).`);
             } else {
                 toast.info("Search complete. No members found matching your query.");
             }
-
         } catch (error) {
             const errorMessage = (error instanceof Error) ? error.message : "An unknown error occurred.";
             toast.error("Search Failed", { description: errorMessage });
@@ -308,26 +359,20 @@ const AdminImport = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     targetSiteId: selectedSite,
-                    // Send the array of objects to the backend
                     membersToDelete: selectedMembers,
                 }),
             });
-
             const result = await response.json();
-
             if (!response.ok) {
                 throw new Error(result.message || "An unknown error occurred during deletion.");
             }
-
             toast.success(result.message || "Deletion process initiated successfully.");
-
         } catch (error) {
             const errorMessage = (error instanceof Error) ? error.message : "A network error occurred.";
             toast.error("Deletion Failed", { description: errorMessage });
         } finally {
             setIsDeleting(false);
             setSelectedMembers([]);
-            // Refresh the search to show the members are gone
             await handleSearch();
         }
     };
@@ -348,26 +393,81 @@ const AdminImport = () => {
             <Navbar />
             <div className="container mx-auto px-4 pt-24 pb-12">
                 <div className="max-w-5xl mx-auto space-y-8">
-                    <div className="flex items-center gap-4 animate-fade-in"><UserPlus className="h-10 w-10 text-primary" /><div><h1 className="text-3xl font-bold">Member & Import Management</h1><p className="text-muted-foreground">Manage existing members or bulk import new users.</p></div></div>
-                    <Card className="bg-gradient-card shadow-card border-primary/10"><CardHeader><CardTitle className="flex items-center gap-2"><Building className="h-5 w-5" />Site Selection</CardTitle><CardDescription>Choose a site to manage its members or import new ones.</CardDescription></CardHeader><CardContent>{isLoadingSites ? <p>Loading sites...</p> : (<div className="max-w-md"><Select value={selectedSite} onValueChange={(value) => { setSelectedSite(value); setSearchResults([]); setSelectedMembers([]); }} disabled={sites.length === 0}><SelectTrigger><SelectValue placeholder="No sites added yet..." /></SelectTrigger><SelectContent>{sites.map((site) => (site && <SelectItem key={site._id} value={site.siteId}>{site.siteName}</SelectItem>))}</SelectContent></Select></div>)}</CardContent></Card>
-
-                    {/* ★★★ The search and delete UI is added back here ★★★ */}
-                    <Card className="bg-gradient-card shadow-card border-primary/10">
-                        <CardContent className="p-6 space-y-4">
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="Search by name or email..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
-                                />
-                                <Button onClick={handleSearch} disabled={isSearching || !selectedSite}>
-                                    <Search className="mr-2 h-4 w-4"/>
-                                    {isSearching ? 'Searching...' : 'Search'}
-                                </Button>
+                    <div className="flex items-center justify-between gap-4 animate-fade-in">
+                        <div className="flex items-center gap-4">
+                            <UserPlus className="h-10 w-10 text-primary" />
+                            <div>
+                                <h1 className="text-3xl font-bold">Member & Import Management</h1>
+                                <p className="text-muted-foreground">Manage existing members or bulk import new users.</p>
                             </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="Search by name or email..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
+                                className="w-64"
+                            />
+                            <Button onClick={handleSearch} disabled={isSearching || !selectedSite}>
+                                <Search className="mr-2 h-4 w-4"/>
+                                {isSearching ? 'Searching...' : 'Search'}
+                            </Button>
+                        </div>
+                    </div>
 
-                            {(isSearching || searchResults.length > 0) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <Card className="bg-gradient-card shadow-card border-primary/10 h-full">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2"><Building className="h-5 w-5" />Site Selection</CardTitle>
+                                <CardDescription>Choose a site to manage its members or import new ones.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {isLoadingSites ? <p>Loading sites...</p> : (
+                                    <Select 
+                                        value={selectedSite} 
+                                        onValueChange={(value) => { 
+                                            setSelectedSite(value); 
+                                            setSearchResults([]); 
+                                            setSelectedMembers([]); 
+                                            fetchSenderDetails(value);
+                                        }} 
+                                        disabled={sites.length === 0}
+                                    >
+                                        <SelectTrigger><SelectValue placeholder="No sites added yet..." /></SelectTrigger>
+                                        <SelectContent>{sites.map((site) => (site && <SelectItem key={site._id} value={site.siteId}>{site.siteName}</SelectItem>))}</SelectContent>
+                                    </Select>
+                                )}
+                            </CardContent>
+                        </Card>
+                        <Card className="bg-gradient-card shadow-card border-primary/10 h-full">
+                            <CardHeader>
+                                <CardTitle>Sender Details</CardTitle>
+                                <CardDescription>Manage the sender name for triggered emails.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        placeholder="Loading..."
+                                        value={senderDetails?.fromName || ''}
+                                        onChange={(e) => setSenderDetails(prev => prev ? { ...prev, fromName: e.target.value } : null)}
+                                        disabled={isFetchingSender || isUpdatingSender}
+                                    />
+                                    <Button onClick={handleUpdateSenderName} disabled={isUpdatingSender || !senderDetails} size="icon">
+                                        <Save className="h-4 w-4" />
+                                    </Button>
+                                    <Button onClick={() => fetchSenderDetails(selectedSite)} disabled={isFetchingSender} variant="outline" size="icon">
+                                        <RefreshCw className={`h-4 w-4 ${isFetchingSender ? 'animate-spin' : ''}`} />
+                                    </Button>
+                                </div>
+                                {senderDetails && <p className="text-xs text-muted-foreground mt-2">Sender Email: {senderDetails.fromEmail}</p>}
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {(isSearching || searchResults.length > 0) && (
+                        <Card className="bg-gradient-card shadow-card border-primary/10">
+                            <CardContent className="p-6 space-y-4">
                                 <div className="border rounded-lg overflow-hidden">
                                     <Table>
                                         <TableHeader>
@@ -413,33 +513,33 @@ const AdminImport = () => {
                                         </TableBody>
                                     </Table>
                                 </div>
+                            </CardContent>
+                            {selectedMembers.length > 0 && (
+                                <CardFooter>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="destructive" disabled={isDeleting}>
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                {isDeleting ? 'Deleting...' : `Delete (${selectedMembers.length}) Selected`}
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    This will permanently delete the selected {selectedMembers.length} member(s) AND their contact records from the site. This action cannot be undone.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Yes, Delete Members</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </CardFooter>
                             )}
-                        </CardContent>
-                        {selectedMembers.length > 0 && (
-                            <CardFooter>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="destructive" disabled={isDeleting}>
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            {isDeleting ? 'Deleting...' : `Delete (${selectedMembers.length}) Selected`}
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                This will permanently delete the selected {selectedMembers.length} member(s) AND their contact records from the site. This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Yes, Delete Members</AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </CardFooter>
-                        )}
-                    </Card>
+                        </Card>
+                    )}
 
                     <form onSubmit={handleSubmit}>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
