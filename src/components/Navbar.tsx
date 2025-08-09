@@ -15,17 +15,7 @@ const Navbar = () => {
         </Link>
         
         <div className="hidden md:flex items-center gap-4">
-           <Link to="/import">
-            <Button 
-              variant={isActive("/import") ? "default" : "ghost"} 
-              size="sm"
-              className="gap-2"
-            >
-              <Users size={16} />
-              Velo Import
-            </Button>
-          </Link>
-          {/* NEW LINK FOR HEADLESS IMPORT 👇 */}
+		{/* NEW LINK FOR HEADLESS IMPORT 👇 */}
           <Link to="/headless-import">
             <Button 
               variant={isActive("/headless-import") ? "default" : "ghost"} 
@@ -36,6 +26,17 @@ const Navbar = () => {
               Headless Import
             </Button>
           </Link>
+           <Link to="/import">
+            <Button 
+              variant={isActive("/import") ? "default" : "ghost"} 
+              size="sm"
+              className="gap-2"
+            >
+              <Users size={16} />
+              Velo Import
+            </Button>
+          </Link>
+          
           <Link to="/manage-sites">
             <Button 
               variant={isActive("/manage-sites") ? "default" : "ghost"} 
